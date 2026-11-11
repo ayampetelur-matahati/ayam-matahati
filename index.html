@@ -155,8 +155,11 @@ textarea{min-height:84px;resize:vertical}
       <input type="text" id="mNama" autocomplete="name" placeholder="mis. Yorim Aklili"></div>
       <div id="fPeranWrap"><label class="f">Peran <span class="req">*</span></label>
       <div class="opts" id="mPeran"></div></div>
-      <div id="fDesaWrap"><label class="f" for="mDesa">Desa tugas <span class="req">*</span></label>
+      <div id="fDesaWrap"><label class="f" for="mDesa" id="lblDesa">Desa tugas <span class="req">*</span></label>
       <select id="mDesa"></select></div>
+      <div id="fPilihWrap" class="hide"><label class="f" for="mNamaPilih">Pilih nama Anda <span class="req">*</span></label>
+      <select id="mNamaPilih"></select>
+      <div class="help" style="margin-top:6px">Nama tidak ada? Pilih "Nama saya tidak ada di daftar" lalu ketik nama Anda.</div></div>
       <button type="button" class="btn sm" id="btnGantiKode" style="margin-top:12px">← Ganti kode</button>
     </div>
     <div class="err" id="mErr"></div>
@@ -263,7 +266,7 @@ textarea{min-height:84px;resize:vertical}
 const CFG = Object.assign({SCRIPT_URL:"",TARGET_PRODUKTIVITAS:80,BATAS_HARI_MONITORING:35}, window.MATAHATI_CONFIG||{});
 const DESA = ["Bitobe","Leloboko","Oelbanu","Letkole","Fatumonas","Bioba Baru"];
 const TAHAP = ["Bitobe · Apr 2026","Gelombang I · Sep 2026","Gelombang II · Okt 2026"];
-const PERAN = ["Koordinator","Field Officer","Focal point desa","Peer mentor","Atuta","FP2D","Pemantau (PO/MEAL/Direktur)"];
+const PERAN = ["Koordinator","Field Officer","Penerima Dukungan","Aktor","Atuta","FP2D","Pemantau (PO/MEAL/Direktur)"];
 const YT = ["Ya","Tidak"];
 const GEJALA = ["Tidak ada","Ngorok/snot","Lesu/tidak mau makan","Diare/kotoran encer","Kutu","Bulu rontok","Cangkang telur tipis/lembek","Jengger pucat"];
 
@@ -314,7 +317,7 @@ const FORMS = {
   {t:"Kepatuhan & peran",f:[
     {k:"Ayam Masih di Kandang Sendiri",type:"radio",opts:YT,label:"Ayam masih dipelihara sendiri di kandangnya?"},
     {k:"Jual/Sembelih Tanpa Izin",type:"radio",opts:YT,label:"Ada ayam dijual/disembelih tanpa izin program?"},
-    {k:"Bantu Anggota Lain",type:"radio",opts:YT,label:"Penerima membantu/mendampingi anggota lain? (peer mentor)"},
+    {k:"Bantu Anggota Lain",type:"radio",opts:YT,label:"Penerima membantu/mendampingi anggota lain? (sebagai aktor)"},
     {k:"Jml Anggota Dibantu",type:"num",label:"Berapa orang dibantu?",show:d=>d["Bantu Anggota Lain"]==="Ya"}]},
   {t:"Catatan & bukti",f:[
     {k:"Kendala Lain",type:"area",label:"Kendala lain"},
@@ -486,7 +489,7 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b
 /* =========================================================
    MASUK
    ========================================================= */
-const isPlaceholder=n=>!n||/ganti dengan nama|^contoh/i.test(String(n));
+const isPlaceholder=n=>!n||/ganti dengan nama|diisi saat masuk|^contoh/i.test(String(n));
 let LOGIN=null; // hasil pemeriksaan kode
 function renderMasuk(){
   show("masuk");LOGIN=null;
@@ -511,17 +514,17 @@ $("#btnMasuk").onclick=async()=>{
       const j=await apiGet({action:"init",kode});
       const u=j.user||{},personal=!!u.personal,roleNm={koordinator:"Koordinator",pemantau:"Pemantau",lapangan:"Lapangan"}[j.role];
       let desa=j.role==="lapangan"?"":"Semua desa";
-      if(personal&&j.role==="lapangan"&&!isPlaceholder(u.nama)){const m=(j.penerima||[]).find(p=>String(p.Nama).trim().toLowerCase()===String(u.nama).trim().toLowerCase());if(m)desa=m.Desa}
+      if(personal&&j.role==="lapangan"&&!isPlaceholder(u.nama)){const m=(j.penerima||[]).find(p=>String(p.Nama).trim().toLowerCase()===String(u.nama).trim().toLowerCase());if(m){desa=m.Desa;u._pid=m["ID Penerima"]}}
       LOGIN={kode,j,personal,role:j.role,nama:isPlaceholder(u.nama)?"":u.nama,jabatan:u.jabatan||"",peran:personal?(u.jabatan||roleNm):"",desa};
       // kode pribadi lengkap → langsung masuk
       if(personal&&LOGIN.nama&&LOGIN.desa){
-        await finishLogin({nama:LOGIN.nama,jabatan:LOGIN.jabatan,peran:LOGIN.peran,desa:LOGIN.desa,kode,role:j.role},j);
+        await finishLogin({nama:LOGIN.nama,jabatan:LOGIN.jabatan,peran:LOGIN.peran,desa:LOGIN.desa,kode,role:j.role,penerimaId:u._pid||""},j);
       }else{
         $("#langkah1").classList.add("hide");$("#langkah2").classList.remove("hide");
         $("#kodeOk").innerHTML=`✅ Kode benar · akses <b>${esc(roleNm)}</b>${LOGIN.jabatan?" · "+esc(LOGIN.jabatan):""}<br><small>Lengkapi isian di bawah, cukup sekali.</small>`;
-        $("#fNamaWrap").classList.toggle("hide",!!LOGIN.nama);
         $("#fPeranWrap").classList.toggle("hide",personal);
         $("#fDesaWrap").classList.toggle("hide",!!LOGIN.desa);
+        updateStep2();
         $("#btnMasuk").textContent="Masuk";
       }
     }catch(e){$("#mErr").textContent=/Kode/.test(e.message)?"Kode akses salah atau tidak aktif. Periksa kembali kodenya.":"Gagal terhubung: "+e.message+". Pastikan ada sinyal untuk masuk pertama kali."}
@@ -529,10 +532,34 @@ $("#btnMasuk").onclick=async()=>{
     return;
   }
   // LANGKAH 2: lengkapi isian yang belum ada
-  const nama=LOGIN.nama||$("#mNama").value.trim(),peran=LOGIN.peran||($("input[name=mPeran]:checked")||{}).value,desa=LOGIN.desa||$("#mDesa").value;
+  const peran=LOGIN.peran||($("input[name=mPeran]:checked")||{}).value,desa=LOGIN.desa||$("#mDesa").value;
+  let nama=LOGIN.nama,penerimaId="";
+  if(!nama){
+    if(penerimaMode()&&$("#mNamaPilih").value&&$("#mNamaPilih").value!=="__lain"){penerimaId=$("#mNamaPilih").value;const p=(LOGIN.j.penerima||[]).find(x=>x["ID Penerima"]===penerimaId);nama=p?p.Nama:""}
+    else nama=$("#mNama").value.trim();
+  }
   if(!nama||!peran||!desa){$("#mErr").textContent="Mohon lengkapi semua isian.";return}
-  await finishLogin({nama,jabatan:LOGIN.jabatan,peran,desa,kode:LOGIN.kode,role:LOGIN.role},LOGIN.j);
+  await finishLogin({nama,jabatan:LOGIN.jabatan,peran,desa,kode:LOGIN.kode,role:LOGIN.role,penerimaId},LOGIN.j);
 };
+function penerimaMode(){if(!LOGIN||LOGIN.role!=="lapangan"||LOGIN.nama)return false;const pr=LOGIN.peran||($("input[name=mPeran]:checked")||{}).value||"";return /penerima/i.test(pr)}
+function updateStep2(){
+  if(!LOGIN)return;const pm=penerimaMode();
+  // desa: penerima tidak boleh "Semua desa"
+  const dsel=$("#mDesa"),cur=dsel.value;
+  dsel.innerHTML=`<option value="">– pilih desa –</option>`+DESA.map(d=>`<option>${d}</option>`).join("")+(pm?"":`<option value="Semua desa">Semua desa</option>`);
+  if([...dsel.options].some(o=>o.value===cur))dsel.value=cur;
+  $("#lblDesa").innerHTML=(pm?"Desa Anda":"Desa tugas")+' <span class="req">*</span>';
+  $("#fPilihWrap").classList.toggle("hide",!pm);
+  if(pm){
+    const ds=LOGIN.desa||dsel.value,ps=$("#mNamaPilih"),prev=ps.value;
+    const L=(LOGIN.j.penerima||[]).filter(p=>p.Desa===ds).sort((a,b)=>String(a.Nama).localeCompare(b.Nama));
+    ps.innerHTML=ds?`<option value="">– pilih nama –</option>`+L.map(p=>`<option value="${esc(p["ID Penerima"])}">${esc(p.Nama)}</option>`).join("")+`<option value="__lain">Nama saya tidak ada di daftar</option>`:`<option value="">– pilih desa dulu –</option>`;
+    if([...ps.options].some(o=>o.value===prev))ps.value=prev;
+  }
+  const showText=!LOGIN.nama&&(!pm||$("#mNamaPilih").value==="__lain");
+  $("#fNamaWrap").classList.toggle("hide",!showText);
+}
+$("#mDesa").addEventListener("change",updateStep2);$("#mNamaPilih").addEventListener("change",updateStep2);$("#mPeran").addEventListener("change",updateStep2);
 $("#mKode").addEventListener("keydown",e=>{if(e.key==="Enter")$("#btnMasuk").click()});
 $("#btnLihatKode").onclick=()=>{const i=$("#mKode"),b=$("#btnLihatKode"),vis=i.type==="text";i.type=vis?"password":"text";b.textContent=vis?"👁 Lihat":"🙈 Sembunyikan";b.setAttribute("aria-label",vis?"Lihat kode":"Sembunyikan kode");i.focus()};
 $("#btnKeluarAtas").onclick=()=>$("#btnKeluar").click();
@@ -576,7 +603,8 @@ async function openForm(type,recId){
   const def=FORMS[type];let rec=recId?await DB.get(recId):null;
   if(rec&&rec.status!=="draft"){toast("Laporan ini sudah difinalkan.");return}
   const data=rec?Object.assign({},rec.data):{};
-  if(!rec){def.sections.forEach(s=>s.f.forEach(f=>{if(f.type==="date")data[f.k]=today()}));if(type==="calon"&&DESA.includes(S.user.desa))data["Desa"]=S.user.desa}
+  if(!rec){def.sections.forEach(s=>s.f.forEach(f=>{if(f.type==="date")data[f.k]=today()}));if(type==="calon"&&DESA.includes(S.user.desa))data["Desa"]=S.user.desa;
+    if(type!=="calon"&&S.user.penerimaId&&penById(S.user.penerimaId)){data["ID Penerima"]=S.user.penerimaId;data["Desa"]=penById(S.user.penerimaId).Desa}}
   S.form={type,def,data,id:rec?rec.id:null,foto:rec?rec.foto:null,offline:rec?rec.offline:!navigator.onLine};
   show("form",{title:def.judul+(rec?" (draf)":""),dirty:false});
   let html="";
@@ -826,7 +854,7 @@ function renderDashboard(){
   const rows=pen.map(p=>({p,lm:LM[p["ID Penerima"]],st:statusOf(p,LM[p["ID Penerima"]])})).sort((a,b)=>a.st.o-b.st.o||String(a.p.Desa).localeCompare(b.p.Desa));
   $("#stLegend").innerHTML=[["var(--critical)","❗","Belum dimonitor"],["var(--serious)","▲","Perlu perhatian"],["var(--warning)","⚠","Terlambat/cukup"],["var(--good)","✓","Baik"]].map(x=>`<span class="chip"><i style="background:${x[0]}"></i>${x[1]} ${x[2]}</span>`).join(" ");
   $("#tblPen").innerHTML=`<thead><tr><th>Status</th><th>Penerima</th><th>Desa</th><th>Tahap</th><th class="num">Diterima</th><th class="num">Hidup</th><th class="num">Produktivitas</th><th class="num">Skor kandang</th><th>Kunjungan terakhir</th><th>Akhir pendampingan</th></tr></thead><tbody>`+
-    rows.map(({p,lm,st})=>`<tr><td><span class="chip"><i style="background:${st.c}"></i>${st.i} ${esc(st.t)}</span></td><td><b>${esc(p.Nama)}</b><br><small class="muted">${esc(p["ID Penerima"])}${p.Difabel==="Ya"?" · difabel":""}${p["Peer Mentor"]==="Ya"?" · peer mentor":""}</small></td><td>${esc(p.Desa)}</td><td>${esc(p.Tahap)}</td>
+    rows.map(({p,lm,st})=>`<tr><td><span class="chip"><i style="background:${st.c}"></i>${st.i} ${esc(st.t)}</span></td><td><b>${esc(p.Nama)}</b><br><small class="muted">${esc(p["ID Penerima"])}${p.Difabel==="Ya"?" · difabel":""}${p["Peer Mentor"]==="Ya"?" · aktor":""}</small></td><td>${esc(p.Desa)}</td><td>${esc(p.Tahap)}</td>
      <td class="num">${fmt(p["Jml Ayam Diterima"])}</td><td class="num">${lm?fmt(lm["Ayam Hidup"]):"–"}</td><td class="num">${lm&&has(lm["Produktivitas (%)"])?fmt(lm["Produktivitas (%)"],1)+"%":"–"}</td><td class="num">${lm&&has(lm["Skor Kandang (0-7)"])?lm["Skor Kandang (0-7)"]+"/7":"–"}</td>
      <td>${lm?tglID(lm["Tgl Kunjungan"])+"<br><small class='muted'>"+esc(lm.Pelapor||"")+"</small>":"–"}</td><td>${has(p["Tgl Distribusi"])?tglID(addDays(p["Tgl Distribusi"],90)):"–"}</td></tr>`).join("")+`</tbody>`;
   // ---- darurat & calon & kendala
@@ -840,7 +868,7 @@ function renderDashboard(){
   const gizi=LMs.filter(m=>m["Ada Balita/Ibu Hamil"]==="Ya"),giziOk=gizi.filter(m=>m["Balita/Ibu Hamil Makan Telur"]==="Ya, rutin").length;
   const pm=mon.filter(m=>m["Bantu Anggota Lain"]==="Ya").reduce((a,m)=>a+num(m["Jml Anggota Dibantu"]),0);
   $("#kpiInklusi").innerHTML=kpi("Penerima difabel",fmt(dif),pen.length?fmt(dif/pen.length*100,0)+"% dari penerima":"")+kpi("Perempuan / Laki-laki",`${fmt(pr)} / ${fmt(lk)}`,nojk?`${nojk} belum diisi`:"")+
-    kpi("Rumah tangga balita/bumil makan telur rutin",gizi.length?fmt(giziOk)+" / "+fmt(gizi.length):"–","dari kunjungan terakhir")+kpi("Anggota didampingi peer mentor",fmt(pm),"akumulasi laporan");
+    kpi("Rumah tangga balita/bumil makan telur rutin",gizi.length?fmt(giziOk)+" / "+fmt(gizi.length):"–","dari kunjungan terakhir")+kpi("Anggota didampingi aktor",fmt(pm),"akumulasi laporan");
 }
 
 /* ---------- Grafik SVG sederhana (tanpa internet) ---------- */
