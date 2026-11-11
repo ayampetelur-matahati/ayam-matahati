@@ -121,6 +121,8 @@ textarea{min-height:84px;resize:vertical}
 .seg button{border:0;background:#fff;padding:8px 12px;color:var(--hijau);font-weight:600;cursor:pointer}
 .seg button.on{background:var(--hijau);color:#fff}
 .hide{display:none!important}
+.kodewrap{display:flex;gap:8px;align-items:stretch}.kodewrap input{flex:1;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.06em}.kodewrap .btn{flex:0 0 auto;white-space:nowrap}
+.btn.keluar{border-color:var(--merah);color:var(--merah)}
 @media print{
   header.top,.stick,.no-print,.toast{display:none!important}
   body{background:#fff} main{max-width:none;padding:0}
@@ -140,26 +142,32 @@ textarea{min-height:84px;resize:vertical}
 <!-- ===== MASUK ===== -->
 <section class="screen" id="s-masuk">
   <h2>Selamat datang 👋</h2>
-  <p class="muted">Isi sekali saja. Data ini disimpan di HP Anda dan dipakai sebagai nama pelapor.</p>
+  <p class="muted">Masukkan kode akses dari Koordinator Program. Cukup sekali di HP ini.</p>
   <div class="card">
-    <label class="f">Nama lengkap <span class="req">*</span></label>
-    <input type="text" id="mNama" autocomplete="name" placeholder="mis. Yorim Aklili">
-    <label class="f">Peran <span class="req">*</span></label>
-    <div class="opts" id="mPeran"></div>
-    <label class="f">Desa tugas <span class="req">*</span></label>
-    <select id="mDesa"></select>
-    <label class="f">Kode akses <span class="req">*</span></label>
-    <div class="help">Minta kode ke Koordinator Program. Kode pribadi akan otomatis mengenali nama Anda.</div>
-    <input type="password" id="mKode" placeholder="Kode akses">
+    <div id="langkah1">
+      <label class="f" for="mKode">Kode akses <span class="req">*</span></label>
+      <div class="kodewrap"><input type="text" id="mKode" placeholder="mis. SUSANA19" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"><button type="button" class="btn sm" id="btnLihatKode" aria-label="Sembunyikan kode">🙈 Sembunyikan</button></div>
+      <div class="help" style="margin-top:6px">Periksa kembali kode sebelum lanjut. Huruf besar dan kecil dibedakan.</div>
+    </div>
+    <div id="langkah2" class="hide">
+      <div class="warnbox" style="background:var(--hijau-muda);border-color:#cfe2cd" id="kodeOk"></div>
+      <div id="fNamaWrap"><label class="f" for="mNama">Nama lengkap <span class="req">*</span></label>
+      <input type="text" id="mNama" autocomplete="name" placeholder="mis. Yorim Aklili"></div>
+      <div id="fPeranWrap"><label class="f">Peran <span class="req">*</span></label>
+      <div class="opts" id="mPeran"></div></div>
+      <div id="fDesaWrap"><label class="f" for="mDesa">Desa tugas <span class="req">*</span></label>
+      <select id="mDesa"></select></div>
+      <button type="button" class="btn sm" id="btnGantiKode" style="margin-top:12px">← Ganti kode</button>
+    </div>
     <div class="err" id="mErr"></div>
-    <button class="btn pri full" style="margin-top:16px" id="btnMasuk">Masuk</button>
+    <button class="btn pri full" style="margin-top:16px" id="btnMasuk">Lanjut</button>
     <p class="muted" style="margin-top:10px">Pertama kali masuk perlu sinyal agar daftar penerima terunduh. Setelah itu aplikasi bisa dipakai tanpa sinyal.</p>
   </div>
 </section>
 
 <!-- ===== BERANDA ===== -->
 <section class="screen" id="s-beranda">
-  <p class="muted" id="hello" style="margin:2px 0 12px"></p>
+  <div class="row" style="align-items:flex-start;margin:2px 0 12px"><p class="muted" id="hello" style="margin:0"></p><button class="btn sm keluar" id="btnKeluarAtas" style="flex:0 0 auto">🚪 Keluar</button></div>
   <div class="tiles">
     <button class="tile utama inp" data-go="form:monitoring"><span class="ic">📋</span><b>Monitoring Bulanan</b><span>Kunjungan kandang: ayam, telur, pakan, kandang</span></button>
     <button class="tile darurat inp" data-go="form:darurat"><span class="ic">🚨</span><b>Laporan Darurat</b><span>Ayam sakit, mati, hilang – lapor segera</span></button>
@@ -174,7 +182,7 @@ textarea{min-height:84px;resize:vertical}
   </div>
   <div class="row no-print" style="margin-top:6px">
     <button class="btn sm" id="btnSegarkan">↻ Perbarui data penerima</button>
-    <button class="btn sm" id="btnKeluar">Ganti pengguna</button>
+    <button class="btn sm keluar" id="btnKeluar">🚪 Keluar</button>
   </div>
   <p class="muted" id="lastSync" style="margin-top:8px"></p>
 </section>
@@ -403,7 +411,7 @@ async function apiPost(body){
 async function refreshPenerima(silent){
   try{
     const j=await apiGet({action:"init",kode:S.user.kode});
-    S.penerima=j.penerima||[];S.lastMon=j.lastMon||{};S.user.role=j.role;if(j.user&&j.user.personal){S.user.nama=j.user.nama||S.user.nama;S.user.jabatan=j.user.jabatan||""}
+    S.penerima=j.penerima||[];S.lastMon=j.lastMon||{};S.user.role=j.role;if(j.user&&j.user.personal){if(!isPlaceholder(j.user.nama))S.user.nama=j.user.nama;S.user.jabatan=j.user.jabatan||S.user.jabatan||""}
     await DB.kvSet("penerima",S.penerima);await DB.kvSet("lastMon",S.lastMon);await DB.kvSet("user",S.user);await DB.kvSet("lastSync",j.time);
     if(!silent)toast("Data penerima diperbarui ✓");renderBeranda();return true;
   }catch(e){if(!silent)toast("Belum bisa terhubung: "+e.message);return false}
@@ -478,29 +486,70 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b
 /* =========================================================
    MASUK
    ========================================================= */
+const isPlaceholder=n=>!n||/ganti dengan nama|^contoh/i.test(String(n));
+let LOGIN=null; // hasil pemeriksaan kode
 function renderMasuk(){
-  show("masuk");
+  show("masuk");LOGIN=null;
+  $("#langkah1").classList.remove("hide");$("#langkah2").classList.add("hide");$("#btnMasuk").textContent="Lanjut";
   $("#mPeran").innerHTML=PERAN.map(p=>`<label class="opt"><input type="radio" name="mPeran" value="${esc(p)}"><span>${esc(p)}</span></label>`).join("");
   $("#mDesa").innerHTML=`<option value="">– pilih desa –</option>`+DESA.map(d=>`<option>${d}</option>`).join("")+`<option value="Semua desa">Semua desa</option>`;
 }
+$("#btnGantiKode").onclick=()=>{LOGIN=null;$("#langkah1").classList.remove("hide");$("#langkah2").classList.add("hide");$("#btnMasuk").textContent="Lanjut";$("#mErr").textContent="";$("#mKode").focus()};
+async function finishLogin(user,j){
+  S.user=user;S.penerima=j.penerima||[];S.lastMon=j.lastMon||{};
+  await DB.kvSet("user",S.user);await DB.kvSet("penerima",S.penerima);await DB.kvSet("lastMon",S.lastMon);await DB.kvSet("lastSync",j.time);
+  S.stack=[];show("beranda");renderBeranda();toast("Berhasil masuk ✓");
+}
 $("#btnMasuk").onclick=async()=>{
-  const nama=$("#mNama").value.trim(),peran=($("input[name=mPeran]:checked")||{}).value,desa=$("#mDesa").value,kode=$("#mKode").value.trim();
-  if(!nama||!peran||!desa||!kode){$("#mErr").textContent="Mohon lengkapi semua isian.";return}
-  $("#mErr").textContent="";$("#btnMasuk").disabled=true;$("#btnMasuk").textContent="Memeriksa kode…";
-  S.user={nama,peran,desa,kode,role:"lapangan"};
-  try{
-    const j=await apiGet({action:"init",kode});
-    S.user.role=j.role;S.penerima=j.penerima||[];S.lastMon=j.lastMon||{};
-    if(j.user&&j.user.personal){S.user.nama=j.user.nama||S.user.nama;S.user.jabatan=j.user.jabatan||""}
-    await DB.kvSet("user",S.user);await DB.kvSet("penerima",S.penerima);await DB.kvSet("lastMon",S.lastMon);await DB.kvSet("lastSync",j.time);
-    S.stack=[];show("beranda");renderBeranda();toast("Berhasil masuk ✓");
-  }catch(e){$("#mErr").textContent=/Kode/.test(e.message)?"Kode akses salah.":"Gagal terhubung: "+e.message+". Pastikan ada sinyal untuk masuk pertama kali.";S.user=null}
-  $("#btnMasuk").disabled=false;$("#btnMasuk").textContent="Masuk";
+  $("#mErr").textContent="";
+  // LANGKAH 1: periksa kode
+  if(!LOGIN){
+    const kode=$("#mKode").value.trim();
+    if(!kode){$("#mErr").textContent="Masukkan kode akses.";return}
+    $("#btnMasuk").disabled=true;$("#btnMasuk").textContent="Memeriksa kode…";
+    try{
+      const j=await apiGet({action:"init",kode});
+      const u=j.user||{},personal=!!u.personal,roleNm={koordinator:"Koordinator",pemantau:"Pemantau",lapangan:"Lapangan"}[j.role];
+      let desa=j.role==="lapangan"?"":"Semua desa";
+      if(personal&&j.role==="lapangan"&&!isPlaceholder(u.nama)){const m=(j.penerima||[]).find(p=>String(p.Nama).trim().toLowerCase()===String(u.nama).trim().toLowerCase());if(m)desa=m.Desa}
+      LOGIN={kode,j,personal,role:j.role,nama:isPlaceholder(u.nama)?"":u.nama,jabatan:u.jabatan||"",peran:personal?(u.jabatan||roleNm):"",desa};
+      // kode pribadi lengkap → langsung masuk
+      if(personal&&LOGIN.nama&&LOGIN.desa){
+        await finishLogin({nama:LOGIN.nama,jabatan:LOGIN.jabatan,peran:LOGIN.peran,desa:LOGIN.desa,kode,role:j.role},j);
+      }else{
+        $("#langkah1").classList.add("hide");$("#langkah2").classList.remove("hide");
+        $("#kodeOk").innerHTML=`✅ Kode benar · akses <b>${esc(roleNm)}</b>${LOGIN.jabatan?" · "+esc(LOGIN.jabatan):""}<br><small>Lengkapi isian di bawah, cukup sekali.</small>`;
+        $("#fNamaWrap").classList.toggle("hide",!!LOGIN.nama);
+        $("#fPeranWrap").classList.toggle("hide",personal);
+        $("#fDesaWrap").classList.toggle("hide",!!LOGIN.desa);
+        $("#btnMasuk").textContent="Masuk";
+      }
+    }catch(e){$("#mErr").textContent=/Kode/.test(e.message)?"Kode akses salah atau tidak aktif. Periksa kembali kodenya.":"Gagal terhubung: "+e.message+". Pastikan ada sinyal untuk masuk pertama kali."}
+    $("#btnMasuk").disabled=false;if(!LOGIN)$("#btnMasuk").textContent="Lanjut";
+    return;
+  }
+  // LANGKAH 2: lengkapi isian yang belum ada
+  const nama=LOGIN.nama||$("#mNama").value.trim(),peran=LOGIN.peran||($("input[name=mPeran]:checked")||{}).value,desa=LOGIN.desa||$("#mDesa").value;
+  if(!nama||!peran||!desa){$("#mErr").textContent="Mohon lengkapi semua isian.";return}
+  await finishLogin({nama,jabatan:LOGIN.jabatan,peran,desa,kode:LOGIN.kode,role:LOGIN.role},LOGIN.j);
 };
+$("#mKode").addEventListener("keydown",e=>{if(e.key==="Enter")$("#btnMasuk").click()});
+$("#btnLihatKode").onclick=()=>{const i=$("#mKode"),b=$("#btnLihatKode"),vis=i.type==="text";i.type=vis?"password":"text";b.textContent=vis?"👁 Lihat":"🙈 Sembunyikan";b.setAttribute("aria-label",vis?"Lihat kode":"Sembunyikan kode");i.focus()};
+$("#btnKeluarAtas").onclick=()=>$("#btnKeluar").click();
 $("#btnKeluar").onclick=async()=>{
-  const pend=(await DB.all()).filter(r=>r.status!=="sent").length;
-  if(pend&&!confirm(`Masih ada ${pend} draf/laporan belum terkirim di HP ini. Laporan tidak akan hilang, tetapi akan dikirim atas nama pengguna baru. Lanjutkan?`))return;
-  await DB.kvSet("user",null);S.user=null;renderMasuk();
+  const all=await DB.all(),draft=all.filter(r=>r.status==="draft").length,wait=all.filter(r=>r.status==="final").length;
+  modal(`<h3 style="margin-top:0">🚪 Keluar dari aplikasi?</h3>
+   <p class="muted">Anda perlu memasukkan kode akses lagi untuk masuk. Daftar penerima dan data dashboard di HP ini akan dihapus demi keamanan.</p>
+   ${draft||wait?`<div class="warnbox">⚠️ Masih ada <b>${draft} draf</b> dan <b>${wait} laporan menunggu sinyal</b> di HP ini. Laporan tidak dihapus, tetapi akan dikirim atas nama pengguna yang masuk berikutnya. Sebaiknya kirim dulu saat ada sinyal.</div>`:""}
+   <div class="row" style="margin-top:14px"><button class="btn" id="kBatal">Batal</button><button class="btn warn" id="kYa">Ya, keluar</button></div>`);
+  $("#kBatal").onclick=closeModal;
+  $("#kYa").onclick=async()=>{
+    for(const k of["user","penerima","lastMon","dash","lastSync"])await DB.kvSet(k,null);
+    S.user=null;S.penerima=[];S.lastMon={};S.dash=null;S.stack=[];
+    ["#mNama","#mKode"].forEach(x=>$(x).value="");$("#mDesa").value="";$("#mErr").textContent="";
+    $("#fDesa").innerHTML="";$("#pDesa").innerHTML="";
+    closeModal();renderMasuk();toast("Anda sudah keluar ✓");
+  };
 };
 $("#btnSegarkan").onclick=()=>refreshPenerima(false);
 

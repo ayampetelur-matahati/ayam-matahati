@@ -1,5 +1,5 @@
 // Service worker: menyimpan aplikasi di HP agar bisa dibuka tanpa sinyal
-const CACHE = 'matahati-ayam-v2';
+const CACHE = 'matahati-ayam-v3';
 const SHELL = ['./', './index.html', './config.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
